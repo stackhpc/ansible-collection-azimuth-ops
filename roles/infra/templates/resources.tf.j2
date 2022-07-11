@@ -17,6 +17,16 @@ resource "openstack_images_image_v2" "{{ image_id }}" {
   tags = ["azimuth_web_console_supported"]
 {% endif %}
 
+{% if "properties" in image %}
+  properties = {{ image.properties | to_nice_json() }} 
+{% endif %}
+
+{% if "verify_checksum" in image and not image.verify_checksum %}
+  verify_checksum = "false"
+{% elif "verfy_checksum" in image and image.verify_checksum %}
+  verify_checksum = "true"
+{% endif %}
+
   lifecycle {
     ignore_changes = [
       image_source_url,
