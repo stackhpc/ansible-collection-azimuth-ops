@@ -17,6 +17,8 @@
       when: azimuth_clusters_enabled
     - role: stackhpc.azimuth_ops.consul
       when: azimuth_apps_enabled or azimuth_clusters_enabled
+    - role: stackhpc.azimuth_ops.ingress_nginx
+      when: azimuth_apps_enabled
     - role: stackhpc.azimuth_ops.zenith
       when: azimuth_apps_enabled
     - role: stackhpc.azimuth_ops.azimuth_capi_operator
