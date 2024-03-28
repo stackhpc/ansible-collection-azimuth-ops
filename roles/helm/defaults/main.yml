@@ -3,7 +3,7 @@
 # The Helm repo
 helm_repo: https://github.com/helm/helm
 # The Helm version to download
-helm_version: v3.14.2
+helm_version: v3.14.3
 # The OS variant and architecture to use
 # See https://github.com/helm/helm/releases for the available options
 helm_os: "{{ ansible_system | lower }}"
