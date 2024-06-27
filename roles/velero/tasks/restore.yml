@@ -1,11 +1,13 @@
+---
+
+- fail:
 
 - name: Check status of target backup
   # This also acts as check that target backup exists
   ansible.builtin.command: >-
-    kubectl get backup
-    -n "{{ velero_release_namespace }}"
-    "{{ velero_restore_backup_name }}"
-    -o jsonpath='{.status.phase}'
+    kubectl get backup {{ velero_restore_backup_name }}
+      --namespace {{ velero_release_namespace }}
+      --output jsonpath='{.status.phase}'
   register: velero_target_backup_check
 
 - name: Fail if target backup is incomplete and strict mode is enabled
@@ -20,7 +22,7 @@
 
 - name: Perform Velero restore
   include_tasks: restore_loop.yml
-  loop: "{{ range(1, velero_max_restore_passes+1) | list }}"
+  loop: "{{ range(1, velero_max_restore_passes + 1) | list }}"
 
 # This step is adapted from Consul restore docs here
 # https://developer.hashicorp.com/consul/tutorials/kubernetes-production/kubernetes-disaster-recovery#recovery-steps
@@ -49,7 +51,7 @@
 - name: Annotate helmrelease and manifest resources to trigger capi addon readoption
   ansible.builtin.command: >-
     kubectl annotate "{{ item }}"
-    velero.io/restore-time={{ '%Y-%m-%d--T%H:%M:%S' | strftime(ansible_date_time.epoch) }}
+    velero.io/restore-time={{ '%Y%m%d%H%M%S' | strftime(ansible_date_time.epoch) }}
     -A --all --overwrite
   loop:
   - helmrelease

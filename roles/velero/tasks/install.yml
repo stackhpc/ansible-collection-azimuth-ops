@@ -1,5 +1,22 @@
+---
 
-- name: Ensure CSI-snapshot-controller Helm chart is installed
+- name: Create Minio client alias for backup target
+  ansible.builtin.command: >-
+    mc alias set backup \
+      {{ velero_s3_url }} \
+      {{ velero_aws_access_key_id }} \
+      {{ velero_aws_secret_access_key }}
+
+- name: Ensure bucket exists for Velero backups
+  ansible.builtin.command: mc mb backup/{{ velero_bucket_name }}
+  register: velero_create_bucket
+  changed_when: velero_create_bucket.rc == 0
+  failed_when: >-
+    velero_create_bucket.rc != 0 and
+    "BucketAlreadyExists" not in velero_create_bucket.stderr
+  when: velero_bucket_create
+
+- name: Ensure CSI snapshot controller is installed
   kubernetes.core.helm:
     chart_ref: "{{ velero_csi_snapshot_controller_chart_name }}"
     chart_repo_url: "{{ velero_csi_snapshot_controller_chart_repo }}"
@@ -11,42 +28,50 @@
     wait: yes
     wait_timeout: "{{ velero_csi_snapshot_controller_wait_timeout }}"
 
-- name: Template Cinder VolumeSnapshotClass definition onto host
-  ansible.builtin.template:
-    src: cinder-csi-snapshot-class.yml.j2
-    dest: /tmp/cinder-csi-snapshot-class.yml
-
-- name: Ensure Cinder VolumeSnapshotClass is installed
-  ansible.builtin.command: kubectl apply -f /tmp/cinder-csi-snapshot-class.yml
-
-- name: Check if Velero release namespace exists
-  ansible.builtin.command: kubectl get namespace "{{ velero_release_namespace }}"
-  register: velero_namespace_check
-  failed_when: false
+- name: Install Cinder volume snapshot class
+  ansible.builtin.command: kubectl apply -f -
+  args:
+    stdin: "{{ velero_cinder_volume_snapshot_class_definition | to_nice_yaml }}"
+  vars:
+    velero_cinder_volume_snapshot_class_definition:
+      apiVersion: snapshot.storage.k8s.io/v1
+      kind: VolumeSnapshotClass
+      metadata:
+        name: "{{ velero_cinder_snapshot_class_name }}"
+        labels:
+          velero.io/csi-volumesnapshot-class: "true"
+      driver: cinder.csi.openstack.org
+      deletionPolicy: Retain
+      parameters:
+        # Must be true to allow snapshotting in-use volumes
+        force-create: "true"
 
 - name: Create Velero release namespace
-  ansible.builtin.command: kubectl create namespace "{{ velero_release_namespace }}"
-  when: velero_namespace_check.rc == 1
+  command: kubectl create namespace {{ velero_release_namespace }}
+  register: velero_create_namespace
+  changed_when: velero_create_namespace.rc == 0
+  failed_when: >-
+    velero_create_namespace.rc != 0 and
+    'AlreadyExists' not in velero_create_namespace.stderr
 
-- name: Check if Velero s3 credentials secret exists
-  ansible.builtin.command: "kubectl -n {{ velero_release_namespace }} get secret {{ velero_s3_creds_secret_name }}"
-  register: velero_s3_creds_check
-  failed_when: false
+- name: Install Velero S3 credentials secret
+  ansible.builtin.command: kubectl apply -f -
+  args:
+    stdin: "{{ velero_s3_creds_secret_definition | to_nice_yaml }}"
+  vars:
+    velero_s3_creds_secret_definition:
+      apiVersion: v1
+      kind: Secret
+      metadata:
+        name: "{{ velero_s3_creds_secret_name }}"
+        namespace: "{{ velero_release_namespace }}"
+      stringData:
+        s3-creds: |
+          [default]
+          aws_access_key_id = {{ velero_aws_access_key_id }}
+          aws_secret_access_key = {{ velero_aws_secret_access_key }}
 
-- name: Ensure S3 credentials file is templated onto seed
-  ansible.builtin.template:
-    src: s3-creds.j2
-    dest: /tmp/s3-creds
-  when: velero_s3_creds_check.rc == 1
-
-- name: Ensure Velero S3 credentials secret exists
-  ansible.builtin.command: >-
-    kubectl -n "{{ velero_release_namespace }}" create secret generic "{{ velero_s3_creds_secret_name }}"
-    --from-file /tmp/s3-creds
-  when: velero_s3_creds_check.rc == 1
-  no_log: "{{ velero_no_log | bool }}"
-
-- name: Ensure Velero Helm chart is installed
+- name: Ensure Velero is installed
   kubernetes.core.helm:
     chart_ref: "{{ velero_chart_name }}"
     chart_repo_url: "{{ velero_chart_repo }}"
@@ -58,24 +83,35 @@
     wait: yes
     wait_timeout: "{{ velero_wait_timeout }}"
 
-- name: Check Velero CLI version
-  ansible.builtin.command: velero version --client-only
-  register: velero_cli_version_check
-  failed_when: false
-
 - block:
-  - name: Ensure Velero CLI is downloaded
-    ansible.builtin.shell: |-
-      wget "{{ velero_cli_download_url }}"
-      tar -xzf "velero-{{ velero_cli_version }}-{{ velero_cli_arch }}.tar.gz"
-      
-  - name: Ensure Velero CLI is in path
-    ansible.builtin.command: cp velero-{{ velero_cli_version }}-{{ velero_cli_arch }}/velero /usr/local/bin/
-    become: true
+    - name: Ensure Velero CLI unpack directory exists
+      file:
+        path: "{{ velero_cli_unpack_directory }}"
+        state: directory
 
-  when: velero_cli_version_check.rc != 0 or velero_cli_version not in velero_cli_version_check.stdout
+    - name: Download and extract Velero CLI archive
+      unarchive:
+        remote_src: yes
+        src: "{{ velero_cli_archive_url }}"
+        dest: "{{ velero_cli_unpack_directory }}"
+        extra_opts:
+          - --strip-components=1
+          - --show-stored-names
 
-- name: Ensure Velero shell completions are in bashrc file
+    - name: Ensure Velero CLI binary directory exists
+      file:
+        path: "{{ velero_cli_bin_directory }}"
+        state: directory
+
+    - name: Copy executable to binary directory
+      copy:
+        remote_src: yes
+        src: "{{ (velero_cli_unpack_directory, 'velero') | path_join }}"
+        dest: "{{ velero_cli_bin_directory }}"
+        mode: u=rwx,g=rw,o=rx
+  become: yes
+
+- name: Ensure Velero CLI shell completions are in .bashrc
   lineinfile:
     path: "{{ ansible_env.HOME }}/.bashrc"
     line: source <(velero completion bash)

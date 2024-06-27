@@ -1,4 +1,5 @@
 ---
+
 # Disable by default so that existing deployments don't break when bucket isn't configured
 # Can be overwritten in azimuth-config as needed
 velero_enabled: false
@@ -11,28 +12,38 @@ velero_no_log: true
 # Velero installation and setup config
 #####
 
-# Velero CLI installation config
-velero_cli_version: v1.13.0
-velero_cli_arch: linux-amd64
-velero_cli_download_url: "https://github.com/vmware-tanzu/velero/releases/download/{{ velero_cli_version }}/velero-{{ velero_cli_version }}-{{ velero_cli_arch }}.tar.gz"
+# Velero CLI archive URL
+velero_cli_repo: https://github.com/vmware-tanzu/velero
+velero_cli_version: v1.14.0
+velero_cli_os: "{{ ansible_system | lower }}"
+velero_cli_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}"
+velero_cli_archive_name: velero-{{ velero_cli_version }}-{{ velero_cli_os }}-{{ velero_cli_arch }}.tar.gz
+velero_cli_archive_url: >-
+  {{ velero_cli_repo }}/releases/download/{{ velero_cli_version }}/{{ velero_cli_archive_name }}
+# The directory into which the Velero CLI archive should be unpacked
+velero_cli_unpack_directory: "/opt/velero/{{ velero_cli_version }}"
+# The directory into which the Velero CLI binary should be placed
+velero_cli_bin_directory: /usr/local/bin
 
 # The URL endpoint for the target object store
-velero_s3_url: "{{ undef(hint='velero_s3_url must be set to the url of your target object store') }}"
+velero_s3_url: "{{ undef(hint = 'velero_s3_url is required') }}"
 
 # The name of a pre-existing bucket in the target object store
-velero_bucket_name: "{{ undef(hint='velero_bucket_name must be set to an existing bucket in the target object store') }}"
+velero_bucket_name: "{{ undef(hint = 'velero_bucket_name is required') }}"
+# Indicates whether to create the bucket if it doesn't exist
+velero_bucket_create: true
 
-# The name to use for the created cluster secret containing the object store credentials
+# The name to use for the secret containing the object store credentials
 velero_s3_creds_secret_name: velero-s3-config
 
-# S3 credentials (should be set in a git-crypt encrypted secrets file!)
-velero_aws_access_key_id: "{{ undef(hint='velero_aws_access_key_id and velero_aws_secret_access_key must be set to provide credentials for the target object store') }}"
-velero_aws_secret_access_key: "{{ undef(hint='velero_aws_access_key_id and velero_aws_secret_access_key must be set to provide credentials for the target object store') }}"
+# S3 credentials
+velero_aws_access_key_id: "{{ undef(hint = 'velero_aws_access_key_id is required') }}"
+velero_aws_secret_access_key: "{{ undef(hint = 'velero_aws_secret_access_key is required') }}"
 
 # Kubernetes CSI Snapshot Controller config
 velero_csi_snapshot_controller_chart_name: snapshot-controller
 velero_csi_snapshot_controller_chart_repo: https://piraeus.io/helm-charts/
-velero_csi_snapshot_controller_chart_version: 2.2.0
+velero_csi_snapshot_controller_chart_version: 3.0.5
 velero_csi_snapshot_controller_release_namespace: kube-system
 velero_csi_snapshot_controller_release_name: csi-snapshot-controller
 velero_csi_snapshot_controller_wait_timeout: 10m
@@ -44,25 +55,25 @@ velero_csi_snapshot_controller_release_values: >-
       combine(velero_csi_snapshot_controller_release_overrides, recursive = True)
   }}
 
-# The name to give to the installed volume snapshot class
-velero_k8s_cinder_snapshot_class_name: cinder-csi-snapshot
+# The name of the volume snapshot class
+velero_cinder_snapshot_class_name: cinder-csi-snapshot
 
 # Velero plugin config
 velero_s3_plugin_image_source: velero/velero-plugin-for-aws
-velero_s3_plugin_image_version: v1.9.0
+velero_s3_plugin_image_version: v1.10.0
 velero_csi_plugin_image_source: velero/velero-plugin-for-csi
-velero_csi_plugin_image_version: v0.7.0
+velero_csi_plugin_image_version: v0.7.1
 
 # Velero Helm chart config
 velero_chart_name: velero
 velero_chart_repo: https://vmware-tanzu.github.io/helm-charts
-velero_chart_version: 5.4.1
+velero_chart_version: 6.7.0
 velero_release_namespace: velero
 velero_release_name: velero
 velero_wait_timeout: 10m
 velero_release_defaults:
   configuration:
-    backupsEnabled: true
+    features: EnableCSI
     backupStorageLocation:
       - name: default
         default: true
@@ -72,13 +83,11 @@ velero_release_defaults:
           name: "{{ velero_s3_creds_secret_name }}"
           key: s3-creds
         config:
-          region: required-but-not-used
-          s3ForcePathStyle: true
           s3Url: "{{ velero_s3_url }}"
-
-    # Use CSI snapshotter instead
+          s3ForcePathStyle: true
+          # Older Ceph doesn't implement checksums properly
+          checksumAlgorithm: ""
     volumeSnapshotLocation: []
-
   initContainers:
     - name: velero-plugin-for-aws
       image: "{{ velero_s3_plugin_image_source }}:{{ velero_s3_plugin_image_version }}"
@@ -92,7 +101,6 @@ velero_release_defaults:
       volumeMounts:
         - mountPath: /target
           name: plugins
-
 velero_release_overrides: {}
 velero_release_values: >-
   {{-
@@ -100,96 +108,181 @@ velero_release_values: >-
       combine(velero_release_overrides, recursive = True)
   }}
 
-
-
 #####
 # Velero backup config
 #####
 
-# List of additional namespaces to exclude from backup
-velero_backup_exclude_namespaces_default: []
-velero_backup_exclude_namespaces_extra: []
-velero_backup_exclude_namespaces: "{{ [velero_backup_exclude_namespaces_default, velero_backup_exclude_namespaces_extra] | flatten }}"
-
-
-
-#####
-# Velero backup schedule config
-#####
-
-# Whether or not to enable the regular backup schedule
-# Note: Setting this to false will still install the 
-# BackupSchedule resource onto the cluster to allow adhoc
-# backups using `velero backup create --from-schedule <name>`
-# This option simply controls the schedule's spec.paused field.
+# Whether or not to enable the scheduled backups
+# NOTE(mkjpryor)
+# When set to false, the schedule objects are still created but in a paused state
+# This allows ad-hoc backups to be created using the schedule objects as a template
 velero_backup_schedule_enabled: true
 
-# Name for backup schedule kubernetes resource
-velero_backup_schedule_name: default
-
-# Schedule to use for backups (defaults to every day at midnight)
+# The schedule for backups, using cron syntax
 # See https://en.wikipedia.org/wiki/Cron for format options
-velero_backup_schedule_timings: "0 0 * * *"
+velero_backup_schedule: "{{ velero_backup_schedule_timings | default('0 0 * * *') }}"
 
-# Time-to-live for existing backups (defaults to 7 days)
+# Time-to-live for backups
 # See https://pkg.go.dev/time#ParseDuration for duration format options
-velero_backup_schedule_ttl: "168h"
+velero_backup_ttl: "{{ velero_schedule_ttl | default('168h') }}"
+
+# Configuration for the volumes backup schedule
+# NOTE(mkjpryor)
+# The only critical volumes with persistent state are Consul and the Keycloak DB
+# All other volumes are ephemeral (e.g. Harbor, metrics, logs)
+#   The name of the schedule
+velero_schedule_volumes_name: volumes
+#   The timing for the schedule
+velero_schedule_volumes_schedule: "{{ velero_backup_schedule }}"
+#   The TTL for backups created by the schedule
+velero_schedule_volumes_ttl: "{{ velero_backup_ttl }}"
+#   List of namespaces to include in backups
+velero_schedule_volumes_included_namespaces:
+  - azimuth
+  - keycloak-system
+#   List of namespaces to exclude from backups
+velero_schedule_volumes_excluded_namespaces: []
+#   List of cluster-scoped resources to include in backups
+velero_schedule_volumes_included_cluster_scoped_resources:
+  - persistentvolumes
+#   List of cluster-scoped resources to exclude from backups
+velero_schedule_volumes_excluded_cluster_scoped_resources: []
+#   List of namespace-scoped resources to include in backups
+velero_schedule_volumes_included_namespace_scoped_resources:
+  - persistentvolumeclaims
+#   List of namespace-scoped resources to exclude from backups
+velero_schedule_volumes_excluded_namespace_scoped_resources: []
+#   List of label selectors for resources to include in backups
+velero_schedule_volumes_label_selectors:
+  - matchLabels:
+      app: consul
+  - matchLabels:
+      postgres-operator.crunchydata.com/cluster: keycloak-db
+#   The spec for the scheduled backup
+velero_schedule_volumes_spec_defaults:
+  paused: "{{ not velero_backup_schedule_enabled }}"
+  schedule: "{{ velero_schedule_volumes_schedule }}"
+  useOwnerReferencesInBackup: false
+  template:
+    includedNamespaces: "{{ velero_schedule_volumes_included_namespaces }}"
+    excludedNamespaces: "{{ velero_schedule_volumes_excluded_namespaces }}"
+    includedClusterScopedResources: "{{ velero_schedule_volumes_included_cluster_scoped_resources }}"
+    excludedClusterScopedResources: "{{ velero_schedule_volumes_excluded_cluster_scoped_resources }}"
+    includedNamespaceScopedResources: "{{ velero_schedule_volumes_included_namespace_scoped_resources }}"
+    excludedNamespaceScopedResources: "{{ velero_schedule_volumes_excluded_namespace_scoped_resources }}"
+    orLabelSelectors: "{{ velero_schedule_volumes_label_selectors }}"
+    snapshotVolumes: true
+    ttl: "{{ velero_schedule_volumes_ttl }}"
+velero_schedule_volumes_spec_overrides: {}
+velero_schedule_volumes_spec: >-
+  {{-
+    velero_schedule_volumes_spec_defaults |
+      combine(velero_schedule_volumes_spec_overrides, recursive = True)
+  }}
+
+# Configuration for the platforms backup schedule
+# NOTE(mkjpryor)
+#   We back up all the objects in namespaces of the form az-* and zenith-services, as well
+#   as all the CaaS cluster types and Kubernetes cluster and app templates
+#   In an ideal world, we would express this using the following variables:
+#     velero_schedule_platforms_included_namespaces: [az-*, zenith-services]
+#     velero_schedule_platforms_excluded_namespaces: []
+#   But this is not currently possible - see https://github.com/vmware-tanzu/velero/issues/1874
+#   So we achieve the same effect in a more brittle way be excluding the known namespaces
+#   The name of the schedule
+velero_schedule_platforms_name: platforms
+#   The timing for the schedule
+velero_schedule_platforms_schedule: "{{ velero_backup_schedule }}"
+#   The TTL for backups created by the schedule
+velero_schedule_platforms_ttl: "{{ velero_backup_ttl }}"
+#   List of namespaces to include in backups
+velero_schedule_platforms_included_namespaces:
+  - "*"
+#   List of namespaces to exclude from backups
+velero_schedule_platforms_excluded_namespaces:
+  - kube-system
+#   List of cluster-scoped resources to include in backups
+velero_schedule_platforms_included_cluster_scoped_resources:
+  - clustertypes.caas.azimuth.stackhpc.com
+  - clustertemplates.azimuth.stackhpc.com
+  - apptemplates.azimuth.stackhpc.com
+#   List of cluster-scoped resources to exclude from backups
+velero_schedule_platforms_excluded_cluster_scoped_resources: []
+#   List of namespace-scoped resources to include in backups
+velero_schedule_platforms_included_namespace_scoped_resources:
+  - "*"
+#   List of namespace-scoped resources to exclude from backups
+velero_schedule_platforms_excluded_namespace_scoped_resources:
+  - events
+#   List of label selectors for resources to include in backups
+velero_schedule_platforms_label_selectors: []
+#   The spec for the scheduled backup
+velero_schedule_platforms_spec_defaults:
+  paused: "{{ not velero_backup_schedule_enabled }}"
+  schedule: "{{ velero_schedule_platforms_schedule }}"
+  useOwnerReferencesInBackup: false
+  template:
+    includedNamespaces: "{{ velero_schedule_platforms_included_namespaces }}"
+    excludedNamespaces: "{{ velero_schedule_platforms_excluded_namespaces }}"
+    includedClusterScopedResources: "{{ velero_schedule_platforms_included_cluster_scoped_resources }}"
+    excludedClusterScopedResources: "{{ velero_schedule_platforms_excluded_cluster_scoped_resources }}"
+    includedNamespaceScopedResources: "{{ velero_schedule_platforms_included_namespace_scoped_resources }}"
+    excludedNamespaceScopedResources: "{{ velero_schedule_platforms_excluded_namespace_scoped_resources }}"
+    orLabelSelectors: "{{ velero_schedule_platforms_label_selectors }}"
+    snapshotVolumes: false
+    ttl: "{{ velero_schedule_platforms_ttl }}"
+velero_schedule_platforms_spec_overrides: {}
+velero_schedule_platforms_spec: >-
+  {{-
+    velero_schedule_platforms_spec_defaults |
+      combine(velero_schedule_platforms_spec_overrides, recursive = True)
+  }}
 
 # TODO: Configure alerts for failed backups
 # See https://github.com/vmware-tanzu/helm-charts/blob/1e6a5b46a59d2dae8153fa8c0794bad84e1d63e1/charts/velero/values.yaml#L239
-
-
 
 #####
 # Velero restore config (applies to stackhpc.azimuth_ops.restore playbook)
 #####
 
-# Name of restore object to create
-velero_restore_name: "velero-backup-restore--{{ '%Y-%m-%d--%H-%M-%S' | strftime(ansible_date_time.epoch) }}"
-
 # Name of backup to use for restore process
-velero_restore_backup_name: "{{ undef(hint='velero_restore_backup_name must be set to the name of an existing backup in your configured object store') }}"
+# If not given, the most recent successful backup for the schedule is used
+velero_restore_backup_name:
 
-# List of resources for which the status field of the k8s object 
-# should be restored. These are directly passed to the 
-# `--status-include-resources` arg of `velero restore create` command
-velero_restore_include_resource_status_defaults:
-  # Identity operator resources
-  - realms.identity.azimuth.stackhpc.com
-  # CaaS platform resources
+# Name of restore object to create
+velero_restore_name: >-
+  {{ velero_restore_backup_name | default(velero_backup_schedule_name, true) }}-{{ '%Y%m%d%H%M%S' | strftime(ansible_date_time.epoch) }}
+
+# CaaS clusters have persistent state in their status, so restore them
+velero_restore_include_resource_status:
   - clusters.caas.azimuth.stackhpc.com
-  # CAPI platform resources
-  - clusters.azimuth.stackhpc.com
-  - kubeadmconfigs.bootstrap.cluster.x-k8s.io
-  - kubeadmcontrolplanes.controlplane.cluster.x-k8s.io
-  - machinedeployments.cluster.x-k8s.io
-  - machinehealthchecks.cluster.x-k8s.io
-  - machinepools.cluster.x-k8s.io
-  - machines.cluster.x-k8s.io
-  - machinesets.cluster.x-k8s.io
-  - openstackclusters.infrastructure.cluster.x-k8s.io
-  - openstackmachines.infrastructure.cluster.x-k8s.io
-velero_restore_include_resource_status_extra: []
-velero_restore_include_resource_status: "{{ [velero_restore_include_resource_status_defaults, velero_restore_include_resource_status_extra] | flatten }}"
 
-# List of namespaces to exclude from backup
-# NOTE: This list should only contain items that are not listed
-# in velero_backup_exclude_namespaces since namespaces excluded
-# from the backup will, by definition, also be excluded from the 
-# restore. This list is primarily useful for development purposes
-# to test whether a namespace is actually required for a restore
-# to complete successfully.
-velero_restore_exclude_namespaces_default: []
-velero_restore_exclude_namespaces_extra: []
-velero_restore_exclude_namespaces: "{{ [velero_restore_exclude_namespaces_default, velero_restore_exclude_namespaces_extra] | flatten }}"
-
-# List of resource types to exclude from restore process
-velero_restore_exclude_resources_defaults:
-  # Profiles cannot be explicitly created via k8s api
-  # and get recreated automatically by calico anyway
-  - profiles.projectcalico.org
-velero_restore_exclude_resources_extra: []
-velero_restore_exclude_resources: "{{ [velero_restore_exclude_resources_defaults, velero_restore_exclude_resources_extra] | flatten }}"
+velero_restore_spec_defaults: >-
+  {{-
+    {
+      "restoreStatus": {
+        "includedResources": velero_restore_include_resource_status,
+      },
+      "includeClusterResources": True,
+      "restorePVs": True,
+      "existingResourcePolicy": "update",
+    } |
+      combine(
+        {"backupName": velero_restore_backup_name}
+        if velero_restore_backup_name
+        else (
+          {"scheduleName": velero_backup_schedule_name}
+          if velero_backup_schedule_enabled
+          else undef(hint = 'unable to determine backup to restore from')
+        )
+      )  
+  }}
+velero_restore_spec_overrides: {}
+velero_restore_spec: >-
+  {{-
+    velero_backup_schedule_spec_defaults |
+      combine(velero_backup_schedule_spec_overrides, recursive = True)
+  }}
 
 # Maximum number of restore passes to attempt
 velero_max_restore_passes: 3

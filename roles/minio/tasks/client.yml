@@ -1,0 +1,8 @@
+---
+
+- name: Download and install Minio client binary
+  get_url:
+    url: "{{ minio_client_url }}"
+    checksum: "{{ minio_client_checksum }}"
+    dest: "{{ minio_client_install_location }}"
+    mode: u=rwx,g=rx,o=rx

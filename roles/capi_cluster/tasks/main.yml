@@ -105,6 +105,16 @@
   when: capi_cluster_release_state == 'present'
 
 - block:
+    # Before deleting the cluster, update the annotation that indicates if volumes should be kept
+    - name: Set volumes policy annotation
+      command: >-
+        kubectl annotate
+          openstackclusters.infrastructure.cluster.x-k8s.io
+          {{ capi_cluster_release_name }}
+          janitor.capi.stackhpc.com/volumes-policy={{ capi_cluster_volumes_policy }}
+          --overwrite
+          --namespace {{ capi_cluster_release_namespace }}
+
     - name: Delete cluster
       kubernetes.core.helm:
         release_namespace: "{{ capi_cluster_release_namespace }}"

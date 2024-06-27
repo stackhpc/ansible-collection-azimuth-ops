@@ -73,7 +73,13 @@ zenith_sshd_service_port: 22
 # The nodePort for SSHD if using a NodePort service
 zenith_sshd_service_nodeport:
 # The fixed IP for a load balancer service, if using a load balancer service
-zenith_sshd_service_load_balancer_ip:
+# This is required when we are in HA mode
+zenith_sshd_service_load_balancer_ip: >-
+  {{-
+    undef(hint = 'zenith_sshd_service_load_balancer_ip is required')
+    if install_mode is defined and install_mode == "ha"
+    else None
+  }}
 
 # The values for the release
 zenith_release_defaults:

@@ -1,6 +1,8 @@
 
 - name: Wait for backups to sync
-  ansible.builtin.command: kubectl -n "{{ velero_release_namespace }}" get backup "{{ velero_restore_backup_name }}"
+  ansible.builtin.command: >-
+    kubectl get backup {{ velero_restore_backup_name }}
+      --namespace {{ velero_release_namespace }}
   register: velero_backup_check
   until: velero_backup_check.rc == 0
   # Wait up to 5 minutes for backups to sync after install
@@ -8,38 +10,34 @@
   delay: 10
 
 - block:
+    # NOTE: Need to explicitly include cluster resources here as default is to exclude 
+    # if namespace include/exclude lists are provided
+    - name: Initiate Velero restore (attempt {{ item }}/{{ velero_max_restore_passes }})
+      ansible.builtin.command: >-
+        velero restore create {{ velero_restore_name }}-{{ item }}
+          --from-backup {{ velero_restore_backup_name }}
+        {%- if velero_restore_exclude_namespaces %}
+          --exclude-namespaces {{ ','.join(velero_restore_exclude_namespaces) }}
+        {%- endif %}
+          --status-include-resources {{ ','.join(velero_restore_include_resource_status) }}
+          --exclude-resources {{ ','.join(velero_restore_exclude_resources)}}
+          --include-cluster-resources
 
-  # NOTE: Need to explicitly include cluster resources here as default is to exclude 
-  # if namespace include/exclude lists are provided
-  - name: Begin Velero restore (attempt {{ item }}/{{ velero_max_restore_passes }})
-    ansible.builtin.command: >-
-      velero restore create
-      "{{ velero_restore_name }}--attempt-{{ item }}"
-      --from-backup "{{ velero_restore_backup_name }}"
-      --exclude-namespaces "{{ ','.join(velero_restore_exclude_namespaces) }}"
-      --status-include-resources "{{ ','.join(velero_restore_include_resource_status) }}"
-      --exclude-resources "{{ ','.join(velero_restore_exclude_resources)}}"
-      --include-cluster-resources
+    - name: Wait for restore attempt {{ item }} to finish
+      ansible.builtin.command: >-
+        kubectl get restore {{ velero_restore_name }}-{{ item }}
+          --namespace {{ velero_release_namespace }}
+          --output jsonpath='{.status.phase}'
+      register: velero_restore_attempt_status
+      until: velero_restore_attempt_status.stdout != "InProgress"
+      retries: "{{ (velero_restore_attempt_timeout / 10) | round(0, 'ceil') | int }}" # Round up to nearest number divisible by 10
+      delay: 10
 
-  - name: Wait for restore attempt {{ item }} to finish
-    ansible.builtin.command: >-
-      kubectl get restore 
-      -n "{{ velero_release_namespace }}" 
-      "{{ velero_restore_name }}--attempt-{{ item }}"
-      -o jsonpath='{.status.phase}'
-    register: velero_restore_attempt_status
-    until: velero_restore_attempt_status.stdout != "InProgress"
-    retries: "{{ (velero_restore_attempt_timeout / 10) | round(0, 'ceil') | int }}" # Round up to nearest number divisible by 10
-    delay: 10
+    - name: Display status of this restore pass
+      debug:
+        msg: "Restore status: {{ velero_restore_attempt_status.stdout | default('Skipped') }}"
 
-  - name: Display status of this restore pass
-    debug:
-      msg: "Restore status: {{ velero_restore_attempt_status.stdout }}"
-
-  # item == 1 condition ensures we always attempt at least 1 restore
-  # NOTE: 'and' > 'or' in operator priority/precedence
   when: >-
-    item == 1
-    or velero_restore_attempt_status is defined
-    and 'stdout' in velero_restore_attempt_status.keys()
-    and velero_restore_attempt_status.stdout != "Completed"
+    velero_restore_attempt_status is not defined or
+    'stdout' not in velero_restore_attempt_status or
+    velero_restore_attempt_status.stdout != "Completed"

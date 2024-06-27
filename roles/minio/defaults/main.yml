@@ -1,0 +1,13 @@
+---
+
+# The base URL for the Minio download server
+minio_base_url: https://dl.min.io
+
+# Parameters for the Minio client installation
+minio_client_os: "{{ ansible_system | lower }}"
+minio_client_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else ansible_architecture }}"
+minio_client_base_url: "{{ minio_base_url }}/client/mc/release/{{ minio_client_os }}-{{ minio_client_arch }}"
+minio_client_url: "{{ minio_client_base_url }}/mc"
+minio_client_checksum_url: "{{ minio_client_base_url }}/mc.sha256sum"
+minio_client_checksum: "sha256:{{ lookup('url', minio_client_checksum_url, wantlist = True) | first | split | first }}"
+minio_client_install_location: /usr/local/bin/mc

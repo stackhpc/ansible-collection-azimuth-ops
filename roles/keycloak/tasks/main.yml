@@ -172,51 +172,8 @@
             app.kubernetes.io/managed-by: azimuth-ops
             app: keycloak
             instance: "{{ keycloak_name }}"
-  
-# We put the known Keycloak admin password in a secret
-# We want to make sure that it matches the variable
-- name: Get current Keycloak admin creds
-  command: >-
-    kubectl get secret {{ keycloak_admin_creds_secret_name }}
-      --namespace {{ keycloak_namespace }}
-      --output json
-  register: keycloak_admin_creds_secret_cmd
-  changed_when: false
-  failed_when: >-
-    keycloak_admin_creds_secret_cmd.rc != 0 and
-    "NotFound" not in keycloak_admin_creds_secret_cmd.stderr
 
-- name: Extract current Keycloak username and password
-  set_fact:
-    keycloak_admin_password_current: >-
-      {{-
-        keycloak_admin_creds_secret_cmd.stdout |
-          from_json |
-          json_query("data.password") |
-          b64decode
-      }}
-  when: keycloak_admin_creds_secret_cmd.rc == 0
-
-- name: Get initial Keycloak admin password
-  block:
-    - name: Get initial admin password secret
-      command: >-
-        kubectl get secret {{ keycloak_initial_admin_secret_name }}
-          --namespace {{ keycloak_namespace }}
-          --output json
-      register: keycloak_initial_admin_secret_cmd
-
-    - name: Set Keycloak admin current password fact
-      set_fact:
-        keycloak_admin_password_current: >-
-          {{-
-            keycloak_initial_admin_secret_cmd.stdout |
-              from_json |
-              json_query("data.password") |
-              b64decode
-          }}
-  when: keycloak_admin_creds_secret_cmd.rc != 0
-
+# Try to obtain a Keycloak admin token with the password from the config
 - name: Get Keycloak admin token
   uri:
     url: "{{ keycloak_base_url }}/realms/master/protocol/openid-connect/token"
@@ -226,12 +183,14 @@
       grant_type: password
       client_id: admin-cli
       username: "{{ keycloak_admin_username }}"
-      password: "{{ keycloak_admin_password_current }}"
+      password: "{{ keycloak_admin_password }}"
+    # An authentication error (401) is an expected status code here
+    status_code: [200, 401]
     ca_path: "{{ keycloak_ca_path or omit }}"
     validate_certs: "{{ keycloak_validate_certs }}"
   register: keycloak_admin_token_req
-  # This is the first task that tries to access the Keycloak API, so retry when
-  # there is an SSL error (reported as -1)
+  # This is the first task that tries to access the Keycloak API, so retry when there
+  # is an SSL error (reported as -1) as cert-manager takes time to create certs
   retries: 60
   delay: 10
   until: keycloak_admin_token_req.status != -1
@@ -239,9 +198,37 @@
 - name: Set Keycloak admin token fact
   set_fact:
     keycloak_admin_token: "{{ keycloak_admin_token_req.json.access_token }}"
+  when: keycloak_admin_token_req.status == 200
 
+# If the token request fails with an auth error, try using the initial password to
+# update the password to the one from config
 - name: Update Keycloak admin password
   block:
+    - name: Get initial admin password
+      command: >-
+        kubectl get secret {{ keycloak_initial_admin_secret_name }}
+          --namespace {{ keycloak_namespace }}
+          --output go-template='{% raw %}{{ .data.password | base64decode }}{% endraw %}'
+      register: keycloak_initial_admin_password_cmd
+
+    - name: Get Keycloak admin token using initial admin password
+      uri:
+        url: "{{ keycloak_base_url }}/realms/master/protocol/openid-connect/token"
+        method: POST
+        body_format: form-urlencoded
+        body:
+          grant_type: password
+          client_id: admin-cli
+          username: "{{ keycloak_admin_username }}"
+          password: "{{ keycloak_initial_admin_password_cmd.stdout }}"
+        ca_path: "{{ keycloak_ca_path or omit }}"
+        validate_certs: "{{ keycloak_validate_certs }}"
+      register: keycloak_admin_token_initial_req
+
+    - name: Set Keycloak admin token fact
+      set_fact:
+        keycloak_admin_token: "{{ keycloak_admin_token_initial_req.json.access_token }}"
+
     - name: Get Keycloak master realm users
       uri:
         url: "{{ keycloak_base_url }}/admin/realms/master/users"
@@ -251,16 +238,6 @@
         ca_path: "{{ keycloak_ca_path or omit }}"
         validate_certs: "{{ keycloak_validate_certs }}"
       register: keycloak_realm_users_req
-
-    - name: Set Keycloak admin user ID fact
-      set_fact:
-        keycloak_admin_user_id: >-
-          {{-
-            keycloak_realm_users_req.json |
-              selectattr("username", "eq", keycloak_admin_username) |
-              first |
-              json_query("id")
-          }}
 
     - name: Set Keycloak admin password
       uri:
@@ -276,23 +253,15 @@
         ca_path: "{{ keycloak_ca_path or omit }}"
         validate_certs: "{{ keycloak_validate_certs }}"
         status_code: [204]
-
-    - name: Update Keycloak admin credential secret
-      command: kubectl apply -f -
-      args:
-        stdin: "{{ keycloak_admin_creds_secret_definition | to_nice_yaml }}"
       vars:
-        keycloak_admin_creds_secret_definition:
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: "{{ keycloak_admin_creds_secret_name }}"
-            namespace: "{{ keycloak_namespace }}"
-            labels: "{{ keycloak_labels }}"
-          stringData:
-            username: "{{ keycloak_admin_username }}"
-            password: "{{ keycloak_admin_password }}"
-  when: keycloak_admin_password != keycloak_admin_password_current
+        keycloak_admin_user_id: >-
+          {{-
+            keycloak_realm_users_req.json |
+              selectattr("username", "eq", keycloak_admin_username) |
+              first |
+              json_query("id")
+          }}
+  when: keycloak_admin_token_req.status != 200
 
 - name: Configure SSL requirement for master realm
   uri:

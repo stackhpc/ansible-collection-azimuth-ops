@@ -573,3 +573,7 @@ capi_cluster_release_values: >-
 
 # The name of the file into which the kubeconfig of the cluster should be output
 capi_cluster_kubeconfig_path: "{{ ansible_env.HOME }}/kubeconfig"
+
+# The volumes policy for the cluster (keep or delete)
+# Determines what happens to Cinder volumes created for PVCs when the cluster is deleted
+capi_cluster_volumes_policy: keep

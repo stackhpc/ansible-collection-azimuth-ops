@@ -2,10 +2,28 @@
 - name: Ensure Velero components are installed
   include_tasks: install.yml
 
-- name: Template Backup Schedule file onto host
-  ansible.builtin.template:
-    src: backup-schedule.yml.j2
-    dest: /tmp/velero-backup-schedule.yml
+- name: Apply volumes backup schedule
+  ansible.builtin.command: kubectl apply -f -
+  args:
+    stdin: "{{ velero_schedule_volumes_definition | to_nice_yaml }}"
+  vars:
+    velero_schedule_volumes_definition:
+      apiVersion: velero.io/v1
+      kind: Schedule
+      metadata:
+        name: "{{ velero_schedule_volumes_name }}"
+        namespace: "{{ velero_release_namespace }}"
+      spec: "{{ velero_schedule_volumes_spec }}"
 
-- name: Submit backup schedule to management cluster
-  ansible.builtin.command: kubectl apply -f /tmp/velero-backup-schedule.yml
+- name: Apply platforms backup schedule
+  ansible.builtin.command: kubectl apply -f -
+  args:
+    stdin: "{{ velero_schedule_platforms_definition | to_nice_yaml }}"
+  vars:
+    velero_schedule_platforms_definition:
+      apiVersion: velero.io/v1
+      kind: Schedule
+      metadata:
+        name: "{{ velero_schedule_platforms_name }}"
+        namespace: "{{ velero_release_namespace }}"
+      spec: "{{ velero_schedule_platforms_spec }}"

@@ -38,6 +38,10 @@
         - include_role:
             name: stackhpc.azimuth_ops.kustomize
 
+        - include_role:
+            name: stackhpc.azimuth_ops.minio
+            tasks_from: client.yml
+
         - name: Slurp kubeconfig file
           slurp:
             src: /etc/rancher/k3s/k3s.yaml
@@ -89,9 +93,9 @@
         # Install the Velero components on the capi cluster and configure the backup schedule
         # NOTE(sd109): Need to use block so that we can set `environment` variables
         - block:
-          - include_role:
-              name: stackhpc.azimuth_ops.velero
-              tasks_from: schedule.yml
+            - include_role:
+                name: stackhpc.azimuth_ops.velero
+                tasks_from: schedule.yml
           environment:
             KUBECONFIG: "{{ ansible_env.HOME }}/kubeconfig-{{ capi_cluster_release_name }}.yaml"
           when: velero_enabled
