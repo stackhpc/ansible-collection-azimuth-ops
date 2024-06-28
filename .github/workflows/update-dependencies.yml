@@ -83,6 +83,12 @@ jobs:
             prereleases: "yes"
             version_jsonpath: capi_cluster_chart_version
 
+          - key: coral-credits
+            path: ./roles/coral_credits/defaults/main.yml
+            respoistory: stackhpc/coral-credits
+            prereleases: "yes"
+            version_jsonpath: coral_credits_chart_version
+
           - key: cluster-api
             path: ./roles/clusterapi/defaults/main.yml
             repository: kubernetes-sigs/cluster-api
