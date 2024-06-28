@@ -2,7 +2,7 @@
 # The chart to use
 azimuth_caas_operator_chart_repo: https://stackhpc.github.io/azimuth-caas-operator
 azimuth_caas_operator_chart_name: azimuth-caas-operator
-azimuth_caas_operator_chart_version: 0.12.6
+azimuth_caas_operator_chart_version: 0.12.7-dev.0.feat-k8s-tf-backend.12
 
 # Release information for the operator release
 # Use the same namespace as Azimuth by default
@@ -12,21 +12,31 @@ azimuth_caas_operator_release_name: azimuth-caas-operator
 # The timeout to wait for operator to become ready
 azimuth_caas_operator_wait_timeout: 10m
 
-# The URL of the Consul server to use
-azimuth_caas_operator_consul_url: >-
-  {{-
-    "http://{}:{}".format(consul_server_host, consul_server_port)
-    if consul_server_host is defined and consul_server_port is defined
-    else (
-      undef(hint = 'azimuth_caas_operator_consul_address is required')
-      if azimuth_clusters_enabled
-      else None
-    )
-  }}
 # The ansible-runner image and tag to use
 # Leave blank to use the defaults
 azimuth_caas_operator_ansible_runner_image_repository:
 azimuth_caas_operator_ansible_runner_image_tag:
+
+# Global extravars that apply to all Ansible executions
+# By default, these set the OpenTofu backend to use Kubernetes secrets
+azimuth_caas_operator_global_extravars_defaults:
+  terraform_backend_type: kubernetes
+  terraform_backend_config:
+    in_cluster_config: "true"
+    # Use unsafe to prevent Ansible interpreting these strings
+    secret_suffix: !unsafe >-
+      {{ cluster_name }}
+    labels: !unsafe >-
+      {{ {"caas.azimuth.stackhpc.com/cluster-id": cluster_id} | to_json }}
+    # Use the namespace for the service account
+    namespace: !unsafe >-
+      {{ lookup('file', '/var/run/secrets/kubernetes.io/serviceaccount/namespace') }}
+azimuth_caas_operator_global_extravars_overrides: {}
+azimuth_caas_operator_global_extravars: >-
+  {{-
+    azimuth_caas_operator_global_extravars_defaults |
+      combine(azimuth_caas_operator_global_extravars_overrides, recursive = True)
+  }}
 
 # The values for the release
 azimuth_caas_operator_release_defaults:
@@ -34,7 +44,6 @@ azimuth_caas_operator_release_defaults:
   metrics:
     enabled: true
   config:
-    consulUrl: "{{ azimuth_caas_operator_consul_url }}"
     ansibleRunnerImage: >-
       {{-
         {} |
@@ -49,6 +58,7 @@ azimuth_caas_operator_release_defaults:
             else {}
           )
       }}
+    globalExtraVars: "{{ azimuth_caas_operator_global_extravars }}"
 azimuth_caas_operator_release_overrides: {}
 azimuth_caas_operator_release_values: >-
   {{-
