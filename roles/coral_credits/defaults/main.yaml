@@ -1,0 +1,20 @@
+---
+
+coral_credits_chart_repo: https://stackhpc.github.io/coral-credits
+coral_credits_chart_name: coral-credits
+coral_credits_chart_version: 0.1.0-dev.0.add-ci-jobs.93
+
+coral_credits_release_namespace: coral-credits
+coral_credits_release_name: coral-credits
+
+# The timeout to wait for coral credits API to become ready
+coral_credits_wait_timeout: 10m
+
+# The values for the release
+coral_credits_release_defaults: {}
+coral_credits_release_overrides: {}
+coral_credits_release_values: >-
+  {{-
+    coral_credits_release_defaults |
+      combine(coral_credits_release_overrides, recursive = True)
+  }}
