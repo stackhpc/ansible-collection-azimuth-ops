@@ -2,7 +2,7 @@
 # The chart to use
 azimuth_schedule_operator_chart_repo: https://stackhpc.github.io/azimuth-schedule-operator
 azimuth_schedule_operator_chart_name: azimuth-schedule-operator
-azimuth_schedule_operator_chart_version: 0.3.0
+azimuth_schedule_operator_chart_version: 0.4.0
 
 # Release information for the operator release
 # Use the same namespace as Azimuth by default
