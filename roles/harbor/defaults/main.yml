@@ -3,7 +3,7 @@
 # The Harbor chart to use
 harbor_chart_repo: https://helm.goharbor.io
 harbor_chart_name: harbor
-harbor_chart_version: 1.13.1
+harbor_chart_version: 1.15.0
 
 # Release information for the Harbor release
 harbor_release_namespace: harbor
