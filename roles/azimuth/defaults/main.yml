@@ -3,7 +3,7 @@
 # The chart to use
 azimuth_chart_repo: https://stackhpc.github.io/azimuth
 azimuth_chart_name: azimuth
-azimuth_chart_version: 0.9.0
+azimuth_chart_version: 0.10.0
 
 # Release information for the Azimuth release
 azimuth_release_namespace: azimuth
