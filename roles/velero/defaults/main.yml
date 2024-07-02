@@ -51,7 +51,7 @@ velero_k8s_cinder_snapshot_class_name: cinder-csi-snapshot
 velero_s3_plugin_image_source: velero/velero-plugin-for-aws
 velero_s3_plugin_image_version: v1.9.0
 velero_csi_plugin_image_source: velero/velero-plugin-for-csi
-velero_csi_plugin_image_version: v0.7.0
+velero_csi_plugin_image_version: v0.7.1
 
 # Velero Helm chart config
 velero_chart_name: velero
