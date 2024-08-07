@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: PR must be from a branch in the stackhpc/ansible-collection-azimuth-ops repo
-        run: exit ${{ github.repository == 'stackhpc/ansible-collection-azimuth-ops' && '0' || '1' }}
+        run: exit ${{ github.repository == 'azimuth-cloud/ansible-collection-azimuth-ops' && '0' || '1' }}
 
   run_azimuth_tests:
     needs: [fail_on_remote]
