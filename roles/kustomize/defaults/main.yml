@@ -3,7 +3,7 @@
 # The kustomize repository
 kustomize_repo: https://github.com/kubernetes-sigs/kustomize
 # The kustomize version to download
-kustomize_version: v5.4.2
+kustomize_version: v5.4.3
 # The OS variant and architecture to use
 # See https://github.com/kubernetes-sigs/kustomize/releases for the available options
 kustomize_os: "{{ ansible_system | lower }}"
