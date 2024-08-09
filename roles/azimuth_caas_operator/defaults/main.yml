@@ -179,7 +179,7 @@ azimuth_caas_workstation_git_url: >-
       default("https://github.com/azimuth-cloud/caas-workstation.git")
   }}
 # The git version for the workstation
-azimuth_caas_workstation_default_git_version: 0.7.1
+azimuth_caas_workstation_default_git_version: 0.8.0
 azimuth_caas_workstation_git_version: >-
   {{
     azimuth_caas_stackhpc_workstation_git_version |
