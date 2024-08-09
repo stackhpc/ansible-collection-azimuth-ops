@@ -110,7 +110,7 @@ clusterapi_watches:
 # Helm chart information for the Cluster API addon provider
 clusterapi_addon_provider_chart_repo: https://azimuth-cloud.github.io/cluster-api-addon-provider
 clusterapi_addon_provider_chart_name: cluster-api-addon-provider
-clusterapi_addon_provider_chart_version: 0.5.9
+clusterapi_addon_provider_chart_version: 0.6.0
 
 # Release information for the Cluster API addon provider release
 clusterapi_addon_provider_release_namespace: capi-addon-system
