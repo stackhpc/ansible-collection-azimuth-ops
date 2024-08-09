@@ -3,7 +3,7 @@
 # The chart to use
 azimuth_identity_operator_chart_repo: https://azimuth-cloud.github.io/azimuth-identity-operator
 azimuth_identity_operator_chart_name: azimuth-identity-operator
-azimuth_identity_operator_chart_version: 0.6.1
+azimuth_identity_operator_chart_version: 0.7.0
 
 # Release information for the operator release
 # Use the same namespace as Azimuth by default
