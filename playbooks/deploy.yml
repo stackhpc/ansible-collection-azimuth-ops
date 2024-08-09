@@ -34,6 +34,8 @@
       when: azimuth_apps_enabled
     - role: azimuth_cloud.azimuth_ops.zenith
       when: azimuth_apps_enabled
+    - role: azimuth_cloud.azimuth_ops.coral_credits
+      when: coral_credits_enabled
     - role: azimuth_cloud.azimuth_ops.azimuth_identity_operator
       when: azimuth_apps_enabled
     - role: azimuth_cloud.azimuth_ops.azimuth_capi_operator

@@ -1,0 +1,56 @@
+---
+
+# The chart to use
+coral_credits_chart_repo: https://stackhpc.github.io/coral-credits
+coral_credits_chart_name: coral-credits
+coral_credits_chart_version: 0.2.1-dev.0.ingress.2
+
+# Release information for the coral credits release
+coral_credits_release_namespace: coral-credits
+coral_credits_release_name: coral-credits
+
+# The timeout to wait for coral credits API to become ready
+coral_credits_wait_timeout: 10m
+
+# Ingress settings
+#   The base domain for Coral credits ingress resources
+coral_credits_ingress_base_domain: >-
+  {{-
+    ingress_base_domain
+    if ingress_base_domain is defined
+    else undef(hint = 'coral_credits_ingress_base_domain is required')
+  }}
+#   Annotations for coral_credits ingress resources
+coral_credits_ingress_annotations: "{{ ingress_annotations | default({}) }}"
+#   Indicates whether TLS should be enabled
+coral_credits_ingress_tls_enabled: "{{ ingress_tls_enabled | default(True) }}"
+#   The TLS secret name (can be null)
+coral_credits_ingress_tls_secret_name: "{{ ingress_tls_secret_name | default(None) }}"
+#   Any TLS-specific annotations
+coral_credits_ingress_tls_annotations: "{{ ingress_tls_annotations | default({}) }}"
+
+# The admin username to use for coral credits
+coral_credits_admin_username: admin
+# The admin password to use for coral credits
+coral_credits_admin_password: >-
+  {{ undef(hint = 'coral_credits_admin_password is required') }}
+
+# The values for the release
+coral_credits_release_defaults:
+  ingress:
+    baseDomain: "{{ coral_credits_ingress_base_domain }}"
+    annotations: "{{ coral_credits_ingress_annotations }}"
+    tls:
+      enabled: "{{ coral_credits_ingress_tls_enabled }}"
+      secretName: "{{ coral_credits_tls_secret_name }}"
+      annotations: "{{ coral_credits_ingress_annotations }}"
+  settings:
+    superuserUsername: "{{ coral_credits_admin_username }}"
+    superuserPassword: "{{ coral_credits_admin_password }}"
+
+coral_credits_release_overrides: {}
+coral_credits_release_values: >-
+  {{-
+    coral_credits_release_defaults |
+      combine(coral_credits_release_overrides, recursive = True)
+  }}

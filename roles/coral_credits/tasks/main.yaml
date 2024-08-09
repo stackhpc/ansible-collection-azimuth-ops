@@ -1,0 +1,14 @@
+---
+
+- name: Install Coral Credits API on target Kubernetes cluster
+  kubernetes.core.helm:
+    chart_ref: "{{ coral_credits_chart_name }}"
+    chart_repo_url: "{{ coral_credits_chart_repo }}"
+    chart_version: "{{ coral_credits_chart_version }}"
+    release_namespace: "{{ coral_credits_release_namespace }}"
+    release_name: "{{ coral_credits_release_name }}"
+    release_values: "{{ coral_credits_release_values }}"
+    atomic: yes
+    create_namespace: yes
+    wait: yes
+    wait_timeout: "{{ coral_credits_wait_timeout }}"
