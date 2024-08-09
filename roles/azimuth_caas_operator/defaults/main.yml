@@ -360,7 +360,7 @@ azimuth_caas_repo2docker_git_url: >-
       default("https://github.com/azimuth-cloud/caas-repo2docker.git")
   }}
 # The git version for the repo2docker appliance
-azimuth_caas_repo2docker_default_git_version: 0.5.0
+azimuth_caas_repo2docker_default_git_version: 0.6.0
 azimuth_caas_repo2docker_git_version: >-
   {{
     azimuth_caas_stackhpc_repo2docker_git_version |
