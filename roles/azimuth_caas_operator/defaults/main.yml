@@ -462,7 +462,7 @@ azimuth_caas_rstudio_git_url: >-
       default("https://github.com/azimuth-cloud/caas-r-studio-server.git")
   }}
 # The git version for the R-Studio appliance
-azimuth_caas_rstudio_default_git_version: 0.5.0
+azimuth_caas_rstudio_default_git_version: 0.6.0
 azimuth_caas_rstudio_git_version: >-
   {{
     azimuth_caas_stackhpc_rstudio_git_version |
