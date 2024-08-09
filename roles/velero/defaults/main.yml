@@ -60,7 +60,7 @@ velero_s3_plugin_image_version: v1.10.0
 # Velero Helm chart config
 velero_chart_name: velero
 velero_chart_repo: https://vmware-tanzu.github.io/helm-charts
-velero_chart_version: 7.1.0
+velero_chart_version: 7.1.4
 velero_release_namespace: velero
 velero_release_name: velero
 velero_wait_timeout: 10m
