@@ -43,6 +43,9 @@
   ansible.builtin.command: kubectl apply --server-side --force-conflicts -k {{ pgo_kustomization_directory }}
   register: kubectl_pgo_resources
   changed_when: kubectl_pgo_resources.stdout_lines | select('match', '(?!.*unchanged$)') | length > 0
+  until: kubectl_pgo_resources is succeeded
+  retries: 5
+  delay: 10
 
 - name: Wait for PGO controllers to become ready
   ansible.builtin.command: >-

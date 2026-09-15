@@ -79,8 +79,11 @@ infra_image_id:
 # OR
 # The name of the image to upload (should be changed when the image changes)
 infra_image_name: ubuntu-noble-20260814
+
+# The architecture of the infra image
+infra_image_arch: "amd64"
 # The source URL for the image
-infra_image_source_url: https://cloud-images.ubuntu.com/releases/noble/release-20260814/ubuntu-24.04-server-cloudimg-amd64.img
+infra_image_source_url: https://cloud-images.ubuntu.com/releases/noble/release-20260814/ubuntu-24.04-server-cloudimg-{{ infra_image_arch }}.img
 # The disk format of the image as downloaded
 infra_image_source_disk_format: qcow2
 # The container format for the image
@@ -88,6 +91,32 @@ infra_image_container_format: bare
 
 # The ID of the flavor to use for the node
 infra_flavor_id: "{{ undef(hint='infra_flavor_id is required') }}"
+
+# Properties to set on arm64/aarch64 images
+## Setting both architecture and hw_architecture as Nova and Glance docs
+## disagree about which is the extant one to set
+### https://docs.openstack.org/nova/latest/admin/scheduling.html#imagepropertiesfilter
+### https://docs.openstack.org/glance/latest/admin/useful-image-properties.html#image-property-keys-and-values
+infra_image_properties_arm64:
+  - architecture=aarch64
+  - hw_architecture=aarch64
+
+# Properties to set on amd64/x86_64 images
+## Setting both architecture and hw_architecture as Nova and Glance docs
+## disagree about which is the extant one to set
+### https://docs.openstack.org/nova/latest/admin/scheduling.html#imagepropertiesfilter
+### https://docs.openstack.org/glance/latest/admin/useful-image-properties.html#image-property-keys-and-values
+infra_image_properties_amd64:
+  - architecture=x86_64
+  - hw_architecture=x86_64
+
+# Properties to set on the infra Glance image
+infra_image_properties: >-
+  {{
+    infra_image_properties_arm64
+    if infra_image_arch == 'arm64'
+    else infra_image_properties_amd64
+  }}
 
 # Indicates whether to use a root volume for the seed node
 # This may be necessary in cases where the root volume is not large enough
